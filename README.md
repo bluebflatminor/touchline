@@ -27,12 +27,15 @@ ninety minutes they accumulate into something between a diagram and a drawing.
   slider (0.05×–6×), scrubber, and toggles to hide the pitch or the ball marker
   so it reads as pure ink on paper.
 
-**Two interactive pages** (open in any browser; host on GitHub Pages to share)
+**Interactive pages** (open in any browser; host on GitHub Pages to share)
 
+- `interactive/flow-live.html` — **no install, no account.** Pick a competition →
+  season → match from dropdowns and it fetches the StatsBomb open data in the
+  browser and draws the real game. Works on a phone or iPad.
 - `interactive/balls-journey.html` — the accumulating pass painting with a
   logarithmic speed control and a per-minute density strip.
 - `interactive/flow-of-the-game.html` — the live ball trace, with **Load match**
-  to render a real game in the browser.
+  to render a real game from a JSON exported by the scripts.
 
 ---
 
@@ -87,3 +90,49 @@ No-network demo (synthetic data, no installs beyond matplotlib/numpy/pillow):
 python scripts/synthetic/pass_network.py   # -> passnet.png
 python scripts/synthetic/pollock.py        # -> pollock.png
 python scripts/synthetic/animate.py        # -> match_paint.gif
+```
+
+The interactive pages need nothing installed — just open the `.html` files.
+
+---
+
+## Layout
+
+```
+touchline/
+├── interactive/
+│   ├── flow-live.html           # pick a match from dropdowns, fetches data in-browser
+│   ├── balls-journey.html       # accumulating pass painting + speed/density
+│   └── flow-of-the-game.html    # live ball trace + Load match (from JSON)
+├── scripts/
+│   ├── synthetic/               # offline demos, no network needed
+│   │   ├── pass_network.py
+│   │   ├── pollock.py
+│   │   └── animate.py
+│   └── statsbomb/               # real matches from open data
+│       ├── render_match.py      # browse + render (network / pollock / trace)
+│       └── export_match.py      # dump a match to JSON for the Flow page
+├── data/                        # exported match JSON lands here
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Notes & honesty
+
+- **Synthetic vs real is always labelled.** The synthetic scripts and the default
+  state of the interactive pages use an invented possession engine — realistic in
+  shape, not real data. Anything drawn from a StatsBomb match is real.
+- The coordinate frame is StatsBomb's 120 × 80 pitch throughout.
+- Built collaboratively with an LLM; the data plumbing and rendering are
+  conventional and inspectable — read the scripts, they're short.
+
+## Credits & licence
+
+- Match data: **StatsBomb Open Data**, used under their free terms — please keep
+  the StatsBomb attribution if you publish renders. See
+  <https://github.com/statsbomb/open-data>.
+- Pitch drawing in the Python scripts: **mplsoccer**.
+- Code in this repo: choose a licence before publishing (MIT or CC0 both fit a
+  solo open project); add a `LICENSE` file to match.
