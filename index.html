@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -133,12 +133,13 @@
         <option value="water">Watercolor</option>
         <option value="ink">Ink</option>
       </select>
+      <select class="brushsel" id="playerSel" aria-label="Player colouring"><option value="">Spectrum</option></select>
       <label class="loadbtn">Load file<input type="file" id="fileInput" accept=".json" hidden></label>
       <span class="srclab" id="srcLabel">synthetic</span>
     </div>
 
     <p class="foot">
-      <span class="key"><span class="wheel"></span>hue = direction</span>
+      <span class="key"><span class="wheel"></span>colour = flow / player</span>
       <span class="key"><span class="chip" style="height:4px;background:#777"></span>thick = long ball</span>
       <span class="key"><span class="chip" style="height:3px;background:var(--gold)"></span>gold = shot</span>
       <span class="key">flecks = dribble</span>
@@ -167,6 +168,7 @@ function wiggle(p0,p1,n){const o=[];const nx=-(p1.y-p0.y),ny=(p1.x-p0.x);const n
   for(let i=0;i<=n;i++){const t=i/n;const w=Math.sin(t*Math.PI*2.4)*amp*(1-Math.abs(t-0.5)*1.2);o.push({x:p0.x+(p1.x-p0.x)*t+w*nx/nl,y:p0.y+(p1.y-p0.y)*t+w*ny/nl});}return o;}
 
 let seg=[], D=0;
+let PLAYERS=[],PIDX={},PLAYERSEL="";
 function buildSynthetic(){
   seg=[]; let ball={x:60,y:40}, team=0; const EVENTS=230;
   const push=(type,pts,t,restart)=>{seg.push({type,pts,team:t,restart:!!restart});ball={x:pts[pts.length-1].x,y:pts[pts.length-1].y};};
@@ -190,6 +192,7 @@ function buildSynthetic(){
     if((ey<4||ey>76)&&R()<0.5){team^=1;const ty=ey<4?0:80;push("throwin",arcPath({x:clamp(ex,8,112),y:ty},{x:clamp(ex+attDir(team)*(8+R()*10),5,115),y:ty<40?12:68},0,8),team,true);}
     else if(R()<0.17){team^=1;}
   }
+  for(const s of seg){s.player=(s.team===0?"A":"B")+(1+Math.floor(R()*11));}
 }
 function buildFromEvents(events){
   seg=[]; let prev=null;
@@ -200,7 +203,7 @@ function buildFromEvents(events){
     if(e.type==="shot")pts=arcPath(s,en,gauss(0,2),10);
     else if(e.type==="dribble")pts=arcPath(s,en,gauss(0,L*0.10),8);
     else pts=arcPath(s,en,gauss(0,L*0.20),12);
-    seg.push({type:e.type||"pass",pts,team:e.team===1?1:0,restart,goal:!!e.goal}); prev=en;
+    seg.push({type:e.type||"pass",pts,team:e.team===1?1:0,restart,goal:!!e.goal,player:e.player||"?"}); prev=en;
   }
   if(!seg.length) buildSynthetic();
 }
@@ -213,10 +216,23 @@ function finalize(){
     s.rnd=Math.random();
     s.wBase=clamp((0.9+L*0.05)*(WMULT[s.type]||1),0.8,9);
   }
+  indexPlayers();
   recolor();
 }
+function golden(i){return (i*137.508)%360;}
+function setCols(s,h,sat,lt){lt=clamp(lt,20,80);const hs=(((h%360)+360)%360).toFixed(0);
+  s.col=`hsl(${hs},${sat}%,${lt.toFixed(0)}%)`;
+  s.colLite=`hsl(${hs},${Math.max(sat-6,20)}%,${Math.min(lt+16,86).toFixed(0)}%)`;
+  s.colDark=`hsl(${hs},${Math.min(sat+4,82)}%,${Math.max(lt-18,12).toFixed(0)}%)`;}
+function indexPlayers(){PLAYERS=[];PIDX={};for(const s of seg){const p=s.player||"?";if(!(p in PIDX)){PIDX[p]=PLAYERS.length;PLAYERS.push(p);}}}
 function recolor(){
   for(const s of seg){
+    if(PLAYERSEL==="__all__"){setCols(s,golden(PIDX[s.player]||0),66,s.type==="shot"?60:53);continue;}
+    if(PLAYERSEL&&PLAYERSEL!==""){
+      if(s.player===PLAYERSEL)setCols(s,golden(PIDX[s.player]||0),82,55);
+      else setCols(s,30,7,54);
+      continue;
+    }
     const a=s.pts[0],b=s.pts[s.pts.length-1];
     const ang=(Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI+360)%360;
     if(s.type==="shot"){s.col=PALETTE.shotCol;s.colLite=PALETTE.shotLite;s.colDark=PALETTE.shotDark;continue;}
@@ -229,10 +245,7 @@ function recolor(){
       case "heat":hue=(PALETTE.h0+clamp(s.len,0,55)/55*PALETTE.span)%360;break;
       default:hue=ang;
     }
-    lt=clamp(lt,26,74);const hh=hue.toFixed(0);
-    s.col=`hsl(${hh},${sat}%,${lt.toFixed(0)}%)`;
-    s.colLite=`hsl(${hh},${Math.max(sat-6,30)}%,${Math.min(lt+16,84).toFixed(0)}%)`;
-    s.colDark=`hsl(${hh},${Math.min(sat+4,82)}%,${Math.max(lt-18,14).toFixed(0)}%)`;
+    setCols(s,hue,sat,clamp(lt,26,74));
   }
 }
 
@@ -326,7 +339,7 @@ function goalSplash(c,center){
 function bakeSegment(idx){const s=seg[idx];
   drawnRestart(s,idx);
   strokePainterly(pctx,s,s.pts.length-1,undefined,0.5);
-  if(s.goal)goalSplash(pctx,s.pts[s.pts.length-1]);
+  if(s.goal&&(PLAYERSEL===""||PLAYERSEL==="__all__"||s.player===PLAYERSEL))goalSplash(pctx,s.pts[s.pts.length-1]);
   else if(s.type==="dribble")splatAlong(pctx,s);
   else if(s.type==="shot")splatBurst(pctx,s.pts[s.pts.length-1],GOLD);
   else if((s.type==="long"||s.type==="pass")&&BRUSH!=="oil"){const e=s.pts[s.pts.length-1];pctx.globalAlpha=0.4;pctx.fillStyle=s.col;
@@ -394,6 +407,9 @@ function randomize(){
   WGAIN=0.4+Math.random()*3.0;
   weight.value=Math.round(1000*Math.log(WGAIN/WMIN)/Math.log(WMAX/WMIN)); weightval.textContent=fmt(WGAIN);
   BRUSH=["oil","water","ink"][Math.floor(Math.random()*3)]; brushSel.value=BRUSH;
+  const rp=Math.random();
+  PLAYERSEL = rp<0.6?"" : rp<0.8?"__all__" : (PLAYERS.length?PLAYERS[Math.floor(Math.random()*PLAYERS.length)]:"");
+  if(playerSel)playerSel.value=(PLAYERSEL==="__all__"||PLAYERS.includes(PLAYERSEL))?PLAYERSEL:"";
   recolor(); paintedUpto=-1; if(paint)clearPaint(); draw();
 }
 randBtn.addEventListener('click',randomize);
@@ -402,6 +418,13 @@ fieldTgl.addEventListener('change',()=>{showField=fieldTgl.checked;draw();});
 ballTgl.addEventListener('change',()=>{showBall=ballTgl.checked;draw();});
 const brushSel=document.getElementById('brushSel');
 brushSel.addEventListener('change',()=>{BRUSH=brushSel.value;paintedUpto=-1;if(paint)clearPaint();draw();});
+const playerSel=document.getElementById('playerSel');
+function populatePlayers(){if(!playerSel)return;
+  const opts=['<option value="">Spectrum</option>','<option value="__all__">By player</option>']
+    .concat(PLAYERS.map(p=>`<option value="${String(p).replace(/"/g,'')}">${p}</option>`));
+  playerSel.innerHTML=opts.join('');
+  playerSel.value=(PLAYERSEL==="__all__"||PLAYERS.includes(PLAYERSEL))?PLAYERSEL:"";}
+playerSel.addEventListener('change',()=>{PLAYERSEL=playerSel.value;recolor();paintedUpto=-1;if(paint)clearPaint();draw();});
 
 // ---- live StatsBomb open data (via jsDelivr CDN, CORS-friendly) ----
 const RAW="https://cdn.jsdelivr.net/gh/statsbomb/open-data@master/data";
@@ -454,7 +477,8 @@ function parseEvents(evs){
     const ti=(team in idx)?idx[team]:0;
     const type=tn==="Shot"?"shot":tn==="Carry"?"dribble":(Math.hypot(end[0]-loc[0],end[1]-loc[1])>32?"long":"pass");
     const isGoal=tn==="Shot"&&get(e,"shot.outcome.name")==="Goal";
-    rows.push({t:(e.minute||0)*60+(e.second||0),i:e.index||0,type,team:ti,goal:isGoal,x0:loc[0],y0:loc[1],x1:end[0],y1:end[1]});
+    const pl=get(e,"player.name")||"?";
+    rows.push({t:(e.minute||0)*60+(e.second||0),i:e.index||0,type,team:ti,goal:isGoal,player:pl,x0:loc[0],y0:loc[1],x1:end[0],y1:end[1]});
   }
   rows.sort((a,b)=>a.t-b.t||a.i-b.i);
   return {events:rows,teams:order};
@@ -467,7 +491,7 @@ loadBtn.addEventListener('click',()=>{
   fetch(`${RAW}/events/${mid}.json`).then(r=>r.json()).then(evs=>{
     const out=parseEvents(evs);
     if(!out.events.length){status("no usable events in that match");loadBtn.disabled=false;return;}
-    buildFromEvents(out.events); finalize(); now=0; paintedUpto=-1; if(paint)clearPaint(); draw();
+    PLAYERSEL=""; buildFromEvents(out.events); finalize(); populatePlayers(); now=0; paintedUpto=-1; if(paint)clearPaint(); draw();
     srcLabel.textContent=out.teams.join(" v ")||"match "+mid;
     status("painting "+out.events.length+" touches");
     loadBtn.disabled=false; play();
@@ -481,7 +505,7 @@ fileInput.addEventListener('change',e=>{
     const j=JSON.parse(rd.result);
     const evs=Array.isArray(j)?j:(j.events||[]);
     if(!evs.length){status("no events in that file");return;}
-    buildFromEvents(evs); finalize(); now=0; paintedUpto=-1; if(paint)clearPaint(); draw();
+    PLAYERSEL=""; buildFromEvents(evs); finalize(); populatePlayers(); now=0; paintedUpto=-1; if(paint)clearPaint(); draw();
     const m=(j&&j.meta)||{};
     srcLabel.textContent=(m.teams&&m.teams.length>=2)?(m.teams[0]+" v "+m.teams[1]):f.name;
     status("painting "+seg.length+" touches from file"); play();
@@ -490,7 +514,7 @@ fileInput.addEventListener('change',e=>{
 });
 
 window.addEventListener('resize',resize);
-buildSynthetic(); finalize();
+buildSynthetic(); finalize(); populatePlayers();
 WGAIN=wgain(); resize(); speedval.textContent=fmt(sp()); weightval.textContent=fmt(WGAIN);
 if(!reduce) setTimeout(play,350);
 </script>
