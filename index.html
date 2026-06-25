@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -132,6 +132,7 @@
         <option value="oil">Oil brush</option>
         <option value="water">Watercolor</option>
         <option value="ink">Ink</option>
+        <option value="sumi">Sumi-e</option>
       </select>
       <select class="brushsel" id="playerSel" aria-label="Player colouring"><option value="">Spectrum</option></select>
       <label class="loadbtn">Load file<input type="file" id="fileInput" accept=".json" hidden></label>
@@ -301,15 +302,42 @@ function oilStroke(c,s,P,alphaCore){const w=strokeW(s);c.lineJoin="round";c.line
   const e=P[P.length-1];c.globalAlpha=0.9;c.fillStyle=s.col;c.beginPath();c.arc(fx(e.x),fy(e.y),w*0.55,0,7);c.fill();
   c.globalAlpha=1;}
 
+function hash2(a,b){const x=Math.sin(a*127.1+b*311.7)*43758.5453;return x-Math.floor(x);}
+function sumiTone(s){let d;
+  if(s.type==="shot")d=1.0;else if(s.type==="long")d=0.92;else if(s.type==="dribble")d=0.8;
+  else if(s.type==="corner"||s.type==="goalkick")d=0.7;else if(s.type==="throwin")d=0.6;
+  else if(s.type==="kickoff")d=0.55;else d=0.32+clamp(s.len/40,0,1)*0.5;
+  if(PLAYERSEL&&PLAYERSEL!==""&&PLAYERSEL!=="__all__")d=(s.player===PLAYERSEL)?Math.max(d,0.9):d*0.22;
+  return clamp(d,0.06,1);}
+function inkHsl(d){return `hsl(28,10%,${Math.round(18+(1-d)*54)}%)`;}
+function sumiStroke(c,s,P,alphaCore){
+  if(P.length<2)return;
+  const d=sumiTone(s),ink=inkHsl(d),inkDark=inkHsl(Math.min(d+0.15,1));
+  const wmax=strokeW(s)*1.5+0.5,base=clamp(0.45+d*0.5,0.3,0.95)*(alphaCore/0.5),N=P.length-1;
+  c.lineCap="round";c.lineJoin="round";
+  c.save();c.shadowColor=ink;c.shadowBlur=wmax*1.3;c.strokeStyle=ink;c.globalAlpha=base*0.25;c.lineWidth=wmax*0.9;
+  const hk=Math.max(1,Math.floor(N*0.35));c.beginPath();c.moveTo(fx(P[0].x),fy(P[0].y));
+  for(let i=1;i<=hk;i++)c.lineTo(fx(P[i].x),fy(P[i].y));c.stroke();c.restore();
+  for(let i=0;i<N;i++){const t=N?i/N:0;
+    if(t>0.5&&hash2(s.rnd,i*1.7)<(t-0.5)*1.25)continue;
+    c.strokeStyle=ink;c.globalAlpha=base*(1-0.45*t);c.lineWidth=Math.max(0.5,wmax*(1-0.82*Math.pow(t,1.2)));
+    c.beginPath();c.moveTo(fx(P[i].x),fy(P[i].y));c.lineTo(fx(P[i+1].x),fy(P[i+1].y));c.stroke();}
+  for(let b=0;b<2;b++){const Pp=offsetPoly(P,(b?1:-1)*wmax*0.18);const sk=Math.floor(N*0.45);
+    c.strokeStyle=inkDark;c.globalAlpha=base*0.28;c.lineWidth=Math.max(wmax*0.12,0.5);c.setLineDash([wmax*0.6,wmax*1.2]);
+    c.beginPath();c.moveTo(fx(Pp[sk].x),fy(Pp[sk].y));for(let i=sk+1;i<=N;i++)c.lineTo(fx(Pp[i].x),fy(Pp[i].y));c.stroke();c.setLineDash([]);}
+  c.globalAlpha=1;}
 function strokePainterly(c,s,kEnd,frac,alphaCore){const P=ptsOf(s,kEnd,frac);
   if(BRUSH==="water")waterStroke(c,s,P,alphaCore);
   else if(BRUSH==="ink")inkStroke(c,s,P,alphaCore);
+  else if(BRUSH==="sumi")sumiStroke(c,s,P,alphaCore);
   else oilStroke(c,s,P,alphaCore);}
 function splatAlong(c,s){const n=clamp(Math.round(s.len/3),3,16);
   const a=s.pts[0],b=s.pts[s.pts.length-1];let nx=-(b.y-a.y),ny=(b.x-a.x);const nl=Math.hypot(nx,ny)||1;
   for(let k=0;k<n;k++){const p=pointAt(s.pts,Math.random());const off=(Math.random()-0.5)*3.2;
     const px=p.x+off*nx/nl,py=p.y+off*ny/nl;const rad=(0.5+Math.random()*1.6)*SCmul()*0.6;
-    if(BRUSH==="water"){c.save();c.shadowColor=s.col;c.shadowBlur=rad*2.6;c.globalAlpha=0.12+Math.random()*0.16;
+    if(BRUSH==="sumi"){c.globalAlpha=0.28+Math.random()*0.32;c.fillStyle=inkHsl(sumiTone(s));
+      c.beginPath();c.arc(fx(px),fy(py),rad*0.9,0,7);c.fill();}
+    else if(BRUSH==="water"){c.save();c.shadowColor=s.col;c.shadowBlur=rad*2.6;c.globalAlpha=0.12+Math.random()*0.16;
       c.fillStyle=s.col;c.beginPath();c.arc(fx(px),fy(py),rad*1.5,0,7);c.fill();c.restore();}
     else if(BRUSH==="oil"){c.globalAlpha=0.78;c.fillStyle=Math.random()<0.5?s.col:s.colDark;
       c.beginPath();c.arc(fx(px),fy(py),rad*1.1,0,7);c.fill();}
@@ -317,11 +345,22 @@ function splatAlong(c,s){const n=clamp(Math.round(s.len/3),3,16);
   c.globalAlpha=1;}
 function splatBurst(c,center,col){for(let k=0;k<12;k++){const ang=Math.random()*7;const r=Math.pow(Math.random(),1.5)*5;
     const px=center.x+Math.cos(ang)*r,py=center.y+Math.sin(ang)*r;const rad=(0.4+Math.random()*1.4)*SCmul()*0.6;
-    if(BRUSH==="water"){c.save();c.shadowColor=col;c.shadowBlur=rad*2.6;c.globalAlpha=0.16;c.fillStyle=col;
+    if(BRUSH==="sumi"){c.globalAlpha=0.32+Math.random()*0.35;c.fillStyle="hsl(28,10%,22%)";
+      c.beginPath();c.arc(fx(px),fy(py),rad,0,7);c.fill();}
+    else if(BRUSH==="water"){c.save();c.shadowColor=col;c.shadowBlur=rad*2.6;c.globalAlpha=0.16;c.fillStyle=col;
       c.beginPath();c.arc(fx(px),fy(py),rad*1.5,0,7);c.fill();c.restore();}
     else if(BRUSH==="oil"){c.globalAlpha=0.82;c.fillStyle=col;c.beginPath();c.arc(fx(px),fy(py),rad*1.2,0,7);c.fill();}
     else{c.globalAlpha=0.3+Math.random()*0.45;c.fillStyle=col;c.beginPath();c.arc(fx(px),fy(py),rad,0,7);c.fill();}}c.globalAlpha=1;}
 function goalSplash(c,center){
+  if(BRUSH==="sumi"){
+    for(let k=0;k<28;k++){const ang=Math.random()*Math.PI*2;const r=Math.pow(Math.random(),0.7)*7;
+      const px=center.x+Math.cos(ang)*r,py=center.y+Math.sin(ang)*r;const rad=(0.5+Math.random()*2.2)*SCmul()*0.6;
+      c.globalAlpha=0.3+Math.random()*0.4;c.fillStyle=`hsl(28,10%,${18+Math.floor(Math.random()*22)}%)`;
+      c.beginPath();c.arc(fx(px),fy(py),rad,0,7);c.fill();}
+    for(let k=0;k<7;k++){const ang=Math.random()*Math.PI*2;const len=3+Math.random()*6;
+      c.globalAlpha=0.5;c.strokeStyle="hsl(28,10%,20%)";c.lineWidth=Math.max(SCmul()*0.7,0.8);c.lineCap="round";
+      c.beginPath();c.moveTo(fx(center.x),fy(center.y));c.lineTo(fx(center.x+Math.cos(ang)*len),fy(center.y+Math.sin(ang)*len));c.stroke();}
+    c.globalAlpha=1;return;}
   const N=PALETTE.splashCount,spread=PALETTE.splashSpread;
   const hueAt=()=>PALETTE.splashRainbow?Math.random()*360:((PALETTE.splashHue+(Math.random()-0.5)*70)+360)%360;
   for(let k=0;k<N;k++){const ang=Math.random()*Math.PI*2;const r=Math.pow(Math.random(),0.7)*spread;
@@ -342,7 +381,7 @@ function bakeSegment(idx){const s=seg[idx];
   if(s.goal&&(PLAYERSEL===""||PLAYERSEL==="__all__"||s.player===PLAYERSEL))goalSplash(pctx,s.pts[s.pts.length-1]);
   else if(s.type==="dribble")splatAlong(pctx,s);
   else if(s.type==="shot")splatBurst(pctx,s.pts[s.pts.length-1],GOLD);
-  else if((s.type==="long"||s.type==="pass")&&BRUSH!=="oil"){const e=s.pts[s.pts.length-1];pctx.globalAlpha=0.4;pctx.fillStyle=s.col;
+  else if((s.type==="long"||s.type==="pass")&&BRUSH!=="oil"&&BRUSH!=="sumi"){const e=s.pts[s.pts.length-1];pctx.globalAlpha=0.4;pctx.fillStyle=s.col;
     pctx.beginPath();pctx.arc(fx(e.x),fy(e.y),Math.max(strokeW(s)*0.5,0.8),0,7);pctx.fill();pctx.globalAlpha=1;}}
 function drawnRestart(s,idx){
   if(s.restart&&idx>0){const pe=seg[idx-1].pts[seg[idx-1].pts.length-1],ps=s.pts[0];
@@ -362,7 +401,7 @@ function draw(){
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(paint,0,0);ctx.restore();
   const s=seg[ai];const localP=clamp((now-s.t0)/(s.t1-s.t0||1),0,1);const at=pointAt(s.pts,localP);
   strokePainterly(ctx,s,at.idx,at.frac,0.62);
-  if(showBall){const hx=fx(at.x),hy=fy(at.y),hc=s.col;
+  if(showBall){const hx=fx(at.x),hy=fy(at.y),hc=BRUSH==="sumi"?"hsl(28,12%,22%)":s.col;
     const g=ctx.createRadialGradient(hx,hy,0,hx,hy,13*SCmul());g.addColorStop(0,hc);g.addColorStop(0.45,"rgba(255,255,255,0)");
     ctx.globalAlpha=0.7;ctx.fillStyle=g;ctx.beginPath();ctx.arc(hx,hy,13*SCmul(),0,7);ctx.fill();
     ctx.globalAlpha=1;ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(hx,hy,2.6*SCmul(),0,7);ctx.fill();}
@@ -406,7 +445,7 @@ function randomize(){
   PALETTE.splashCount=30+Math.floor(Math.random()*36); PALETTE.splashSpread=7+Math.random()*7;
   WGAIN=0.4+Math.random()*3.0;
   weight.value=Math.round(1000*Math.log(WGAIN/WMIN)/Math.log(WMAX/WMIN)); weightval.textContent=fmt(WGAIN);
-  BRUSH=["oil","water","ink"][Math.floor(Math.random()*3)]; brushSel.value=BRUSH;
+  BRUSH=["oil","water","ink","sumi"][Math.floor(Math.random()*4)]; brushSel.value=BRUSH;
   const rp=Math.random();
   PLAYERSEL = rp<0.6?"" : rp<0.8?"__all__" : (PLAYERS.length?PLAYERS[Math.floor(Math.random()*PLAYERS.length)]:"");
   if(playerSel)playerSel.value=(PLAYERSEL==="__all__"||PLAYERS.includes(PLAYERSEL))?PLAYERSEL:"";
