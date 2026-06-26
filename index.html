@@ -414,13 +414,24 @@ function splatBurst(c,center,col){for(let k=0;k<12;k++){const ang=Math.random()*
     else{c.globalAlpha=0.3+Math.random()*0.45;c.fillStyle=col;c.beginPath();c.arc(fx(px),fy(py),rad,0,7);c.fill();}}c.globalAlpha=1;}
 function goalSplash(c,center){
   if(BRUSH==="sumi"){
-    for(let k=0;k<28;k++){const ang=Math.random()*Math.PI*2;const r=Math.pow(Math.random(),0.7)*7;
-      const px=center.x+Math.cos(ang)*r,py=center.y+Math.sin(ang)*r;const rad=(0.5+Math.random()*2.2)*SCmul()*0.6;
-      c.globalAlpha=0.3+Math.random()*0.4;c.fillStyle=`hsl(28,10%,${18+Math.floor(Math.random()*22)}%)`;
+    const cx=center.x,cy=center.y;
+    c.save();c.shadowColor="hsl(28,10%,17%)";c.shadowBlur=SCmul()*3.4;c.globalAlpha=0.5;c.fillStyle="hsl(28,10%,17%)";
+    c.beginPath();c.arc(fx(cx),fy(cy),SCmul()*1.5,0,7);c.fill();c.restore();
+    const drops=22+Math.floor(Math.random()*10);
+    for(let k=0;k<drops;k++){const ang=Math.random()*Math.PI*2;const r=Math.pow(Math.random(),0.6)*8.5;
+      const px=cx+Math.cos(ang)*r,py=cy+Math.sin(ang)*r;const rad=(0.3+Math.random()*Math.random()*2.8)*SCmul()*0.6;
+      c.globalAlpha=0.22+Math.random()*0.45;c.fillStyle=`hsl(28,10%,${16+Math.floor(Math.random()*26)}%)`;
       c.beginPath();c.arc(fx(px),fy(py),rad,0,7);c.fill();}
-    for(let k=0;k<7;k++){const ang=Math.random()*Math.PI*2;const len=3+Math.random()*6;
-      c.globalAlpha=0.5;c.strokeStyle="hsl(28,10%,20%)";c.lineWidth=Math.max(SCmul()*0.7,0.8);c.lineCap="round";
-      c.beginPath();c.moveTo(fx(center.x),fy(center.y));c.lineTo(fx(center.x+Math.cos(ang)*len),fy(center.y+Math.sin(ang)*len));c.stroke();}
+    const flicks=4+Math.floor(Math.random()*4);
+    for(let f=0;f<flicks;f++){const a0=Math.random()*Math.PI*2,len=4+Math.random()*8,perp=a0+Math.PI/2,bend=(Math.random()-0.5)*len*0.9;
+      const ex=cx+Math.cos(a0)*len,ey=cy+Math.sin(a0)*len;
+      const mx=cx+Math.cos(a0)*len*0.5+Math.cos(perp)*bend,my=cy+Math.sin(a0)*len*0.5+Math.sin(perp)*bend;
+      const w0=(1.5+Math.random()*1.7)*SCmul(),steps=9;c.lineCap="round";c.strokeStyle=`hsl(28,10%,${18+Math.floor(Math.random()*10)}%)`;
+      let px=cx,py=cy;
+      for(let i=1;i<=steps;i++){const t=i/steps,u=1-t;const bx=u*u*cx+2*u*t*mx+t*t*ex,by=u*u*cy+2*u*t*my+t*t*ey;
+        if(t>0.55&&Math.random()<(t-0.55)*1.5){px=bx;py=by;continue;}
+        c.globalAlpha=0.55-0.4*t;c.lineWidth=Math.max(0.4,w0*(1-0.85*t));
+        c.beginPath();c.moveTo(fx(px),fy(py));c.lineTo(fx(bx),fy(by));c.stroke();px=bx;py=by;}}
     c.globalAlpha=1;return;}
   const N=PALETTE.splashCount,spread=PALETTE.splashSpread;
   const hueAt=()=>PALETTE.splashRainbow?Math.random()*360:((PALETTE.splashHue+(Math.random()-0.5)*70)+360)%360;
