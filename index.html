@@ -137,6 +137,7 @@
         <option value="water">Watercolor</option>
         <option value="ink">Ink</option>
         <option value="sumi">Sumi-e</option>
+        <option value="density">Density</option>
       </select>
       <select class="brushsel" id="playerSel" aria-label="Player colouring"><option value="">Spectrum</option></select>
       <select class="brushsel" id="groundSel" aria-label="Ground"><option value="cream">Cream paper</option><option value="paper">Rice paper</option><option value="kraft">Kraft</option><option value="slate">Slate</option><option value="charcoal">Charcoal</option></select>
@@ -154,6 +155,7 @@
       <label for="winStart">Window</label>
       <input type="range" id="winStart" min="0" max="1000" step="1" value="0" aria-label="Window start">
       <input type="range" id="winEnd" min="0" max="1000" step="1" value="1000" aria-label="Window end">
+      <span class="val" id="winval">full</span>
     </div>
 
     <p class="foot">
@@ -238,6 +240,7 @@ function finalize(){
   recolor();
   buildGoalList();
   winA=0;winB=1;
+  updateWinLabel();
 }
 function golden(i){return (i*137.508)%360;}
 function setCols(s,h,sat,lt){lt=clamp(lt,20,80);const hs=(((h%360)+360)%360).toFixed(0);
@@ -300,7 +303,11 @@ function fadeWash(){if(!paint||!pctx)return;pctx.save();pctx.setTransform(1,0,0,
 function applyWindow(){now=WS();paintedUpto=-1;lastSounded=-1;if(paint)clearPaint();
   const ws=document.getElementById('winStart'),we=document.getElementById('winEnd');
   if(ws){ws.value=Math.round(winA*1000);we.value=Math.round(winB*1000);}
-  draw();}
+  updateWinLabel();draw();}
+function updateWinLabel(){const wv=document.getElementById('winval');if(!wv)return;
+  if(winA<=0.001&&winB>=0.999){wv.textContent="full";return;}
+  const a=Math.round(winA*D/60),b=Math.round(winB*D/60);
+  wv.textContent=a+"\u2032\u2013"+b+"\u2032";}
 function buildGoalList(){goalIdx=[];for(let i=0;i<seg.length;i++)if(seg[i].goal)goalIdx.push(i);curGoal=-1;}
 function isoGoal(dir){if(!goalIdx.length){const se=document.getElementById('status');if(se)se.textContent="no goals in this match";return;}
   curGoal=curGoal<0?(dir<0?goalIdx.length-1:0):clamp(curGoal+dir,0,goalIdx.length-1);
@@ -391,10 +398,16 @@ function sumiStroke(c,s,P,alphaCore){
     c.strokeStyle=inkDark;c.globalAlpha=base*0.28;c.lineWidth=Math.max(wmax*0.12,0.5);c.setLineDash([wmax*0.6,wmax*1.2]);
     c.beginPath();c.moveTo(fx(Pp[sk].x),fy(Pp[sk].y));for(let i=sk+1;i<=N;i++)c.lineTo(fx(Pp[i].x),fy(Pp[i].y));c.stroke();c.setLineDash([]);}
   c.globalAlpha=1;}
+function densityStroke(c,s,P,alphaCore){if(P.length<2)return;
+  const ink=DARKG?"hsl(34,6%,90%)":"hsl(28,8%,15%)";const w=Math.max(strokeW(s)*0.8,1.1);
+  c.lineJoin="round";c.lineCap="round";c.strokeStyle=ink;const k=alphaCore/0.5;
+  c.globalAlpha=0.05*k;c.lineWidth=w*2.2;strokePoly(c,P);
+  c.globalAlpha=0.11*k;c.lineWidth=w;strokePoly(c,P);c.globalAlpha=1;}
 function strokePainterly(c,s,kEnd,frac,alphaCore){const P=ptsOf(s,kEnd,frac);
   if(BRUSH==="water")waterStroke(c,s,P,alphaCore);
   else if(BRUSH==="ink")inkStroke(c,s,P,alphaCore);
   else if(BRUSH==="sumi")sumiStroke(c,s,P,alphaCore);
+  else if(BRUSH==="density")densityStroke(c,s,P,alphaCore);
   else oilStroke(c,s,P,alphaCore);}
 function splatAlong(c,s){const n=clamp(Math.round(s.len/3),3,16);
   const a=s.pts[0],b=s.pts[s.pts.length-1];let nx=-(b.y-a.y),ny=(b.x-a.x);const nl=Math.hypot(nx,ny)||1;
@@ -455,16 +468,19 @@ function bakeSegment(idx){const s=seg[idx];
   if(WINON()&&(s.t1<=WS()||s.t0>=WE()))return;
   drawnRestart(s,idx);
   strokePainterly(pctx,s,s.pts.length-1,undefined,0.5);
+  if(BRUSH!=="density"){
   if(s.goal&&(PLAYERSEL===""||PLAYERSEL==="__all__"||s.player===PLAYERSEL))goalSplash(pctx,s.pts[s.pts.length-1]);
   else if(s.type==="dribble")splatAlong(pctx,s);
   else if(s.type==="shot")splatBurst(pctx,s.pts[s.pts.length-1],GOLD);
   else if((s.type==="long"||s.type==="pass")&&BRUSH!=="oil"&&BRUSH!=="sumi"){const e=s.pts[s.pts.length-1];pctx.globalAlpha=0.4;pctx.fillStyle=s.col;
     pctx.beginPath();pctx.arc(fx(e.x),fy(e.y),Math.max(strokeW(s)*0.5,0.8),0,7);pctx.fill();pctx.globalAlpha=1;}
+  }
   if(showDots&&s.type!=="kickoff")markerDot(pctx,s.pts[s.pts.length-1],s);}
 function markerDot(c,pt,s){
-  const sumi=BRUSH==="sumi";
-  const fill=sumi?inkHsl(Math.max(sumiTone(s)-0.2,0.05)):s.col;
-  const ring=sumi?inkHsl(Math.min(sumiTone(s)+0.12,1)):s.colDark;
+  const mono=BRUSH==="sumi"||BRUSH==="density";
+  const tone=BRUSH==="density"?0.62:sumiTone(s);
+  const fill=mono?inkHsl(Math.max(tone-0.2,0.05)):s.col;
+  const ring=mono?inkHsl(Math.min(tone+0.12,1)):s.colDark;
   const r=clamp(1.0+s.wBase*0.16,1.0,3.0)*SCmul();
   c.globalAlpha=0.92;c.fillStyle=fill;c.beginPath();c.arc(fx(pt.x),fy(pt.y),r,0,7);c.fill();
   c.globalAlpha=0.7;c.lineWidth=Math.max(r*0.32,0.5);c.strokeStyle=ring;c.beginPath();c.arc(fx(pt.x),fy(pt.y),r,0,7);c.stroke();
@@ -488,7 +504,7 @@ function draw(){
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(paint,0,0);ctx.restore();
   const s=seg[ai];const localP=clamp((now-s.t0)/(s.t1-s.t0||1),0,1);const at=pointAt(s.pts,localP);
   strokePainterly(ctx,s,at.idx,at.frac,0.62);
-  if(showBall){const hx=fx(at.x),hy=fy(at.y),hc=BRUSH==="sumi"?inkHsl(0.92):s.col;
+  if(showBall){const hx=fx(at.x),hy=fy(at.y),hc=(BRUSH==="sumi"||BRUSH==="density")?inkHsl(0.92):s.col;
     const g=ctx.createRadialGradient(hx,hy,0,hx,hy,13*SCmul());g.addColorStop(0,hc);g.addColorStop(0.45,"rgba(255,255,255,0)");
     ctx.globalAlpha=0.7;ctx.fillStyle=g;ctx.beginPath();ctx.arc(hx,hy,13*SCmul(),0,7);ctx.fill();
     ctx.globalAlpha=1;ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(hx,hy,2.6*SCmul(),0,7);ctx.fill();}
